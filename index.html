@@ -638,6 +638,7 @@ em.hl{font-style:italic;color:var(--ink)}
   var isPresenter=!!presentToken;
   var API='/api/state';
   var syncOK=false, following=!isPresenter, lastServerScene=null, pollT=null;
+  var FRESH_MS=90000, liveNow=false;   // only follow a presenter whose last broadcast is recent
   var badge=document.getElementById('badge'), badgeTxt=document.getElementById('badgeTxt'), synctip=document.getElementById('synctip');
 
   scenes.forEach(function(s,i){var d=document.createElement('div');d.className='pd';d.title=names[i];
@@ -777,11 +778,13 @@ em.hl{font-style:italic;color:var(--ink)}
   }
   function poll(){
     fetch(API,{cache:'no-store'}).then(function(r){return r.ok?r.json():Promise.reject();})
-    .then(function(d){ syncOK=true; updateBadge();
+    .then(function(d){ syncOK=true;
+      liveNow = (typeof d.ts==='number') && (Date.now()-d.ts < FRESH_MS);  // stale broadcast => not live
       if(typeof d.scene==='number'){ lastServerScene=d.scene;
-        if(following && d.scene!==cur) go(d.scene);
+        if(liveNow && following && d.scene!==cur) go(d.scene);
       }
-    }).catch(function(){ /* keep self-guided; badge stays hidden */ });
+      updateBadge();
+    }).catch(function(){ liveNow=false; /* keep self-guided; badge stays hidden */ });
   }
   function startViewerSync(){
     poll(); pollT=setInterval(poll,1200);
@@ -790,7 +793,7 @@ em.hl{font-style:italic;color:var(--ink)}
 
   function updateBadge(){
     if(isPresenter){ badge.className='chrome badge cast show'; badgeTxt.textContent='Broadcasting'; synctip.classList.remove('show'); return; }
-    if(!syncOK){ badge.classList.remove('show'); synctip.classList.remove('show'); return; }
+    if(!syncOK || !liveNow){ badge.classList.remove('show'); synctip.classList.remove('show'); return; }
     badge.className='chrome badge live show';
     if(following){ badgeTxt.textContent='Live · following'; synctip.classList.remove('show'); }
     else{ badgeTxt.textContent='Self-guided'; synctip.innerHTML='you’ve left the live view · <a id="resyncA">follow presenter ↩</a>'; synctip.classList.add('show');
@@ -869,7 +872,7 @@ em.hl{font-style:italic;color:var(--ink)}
 
   // boot
   document.getElementById('actTot').textContent=pad(total);
-  if(isPresenter){ updateBadge(); toggleTimer(); publish(0); }
+  if(isPresenter){ updateBadge(); toggleTimer(); publish(0); setInterval(function(){ publish(cur); }, 30000); }
   else { startViewerSync(); }
   render();
 })();
