@@ -1,82 +1,78 @@
-// /api/ask — "Ask the orchestrator" Q&A for the closing scene.
-// POST { question, history? } -> { answer }
-// Calls the Anthropic Messages API SERVER-SIDE so your API key never reaches the browser.
-// Requires the ANTHROPIC_API_KEY app setting. ANTHROPIC_MODEL is optional.
+// /api/state — shared "current scene" for presenter -> phones sync.
+// GET            -> { scene }
+// GET ?selftest=1 -> { ok, container, detail }  (diagnoses the storage connection)
+// POST { scene, token } -> writes (requires PRESENTER_TOKEN)
 
-const KEY = process.env.ANTHROPIC_API_KEY;
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
-const ENDPOINT = "https://api.anthropic.com/v1/messages";
+const { BlobServiceClient } = require("@azure/storage-blob");
 
-const SYSTEM = [
-  "You are 'the orchestrator' — a concise, grounded guide taking live questions at the end of a short talk",
-  "that defines agentic AI for an audience of healthcare and company leaders.",
-  "Context of the talk: clinicians are buried in documentation; agentic AI can take on the gathering,",
-  "reading, and writing while clinicians keep the deciding and the caring. An orchestrator plans and",
-  "dispatches small specialized agents (patient chart via FHIR, the round's transcript, guidelines, and a",
-  "safety/evaluation agent), with the human in the loop the whole way. As software begins to inform clinical",
-  "decisions it becomes a regulated medical device (SaaS -> SaMD), which raises the bar for validation,",
-  "continuous monitoring, and clear accountability.",
-  "Answer in 2-4 sentences, plain language, no hype, no markdown headings or bullet lists.",
-  "Orient answers to leaders' decisions: governance, evidence, teaming, and risk.",
-  "If asked for medical advice or a specific diagnosis, decline briefly and note this is an educational demo."
-].join(" ");
+const CONN = process.env.AZURE_STORAGE_CONNECTION;
+const CONTAINER = "live";
+const BLOB = "state.json";
+const TOKEN = process.env.PRESENTER_TOKEN || "";
+
+function streamToString(readable) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    readable.on("data", (d) => chunks.push(d.toString()));
+    readable.on("end", () => resolve(chunks.join("")));
+    readable.on("error", reject);
+  });
+}
+
+async function blobClient() {
+  const svc = BlobServiceClient.fromConnectionString(CONN);
+  const cont = svc.getContainerClient(CONTAINER);
+  await cont.createIfNotExists();
+  return cont.getBlockBlobClient(BLOB);
+}
+
+async function readState() {
+  try {
+    const b = await blobClient();
+    const dl = await b.download();
+    return JSON.parse(await streamToString(dl.readableStreamBody));
+  } catch (e) {
+    return { scene: 0 };
+  }
+}
 
 module.exports = async function (context, req) {
   const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
   try {
-    if (req.method !== "POST") {
-      context.res = { status: 405, headers, body: { error: "method not allowed" } };
-      return;
-    }
-    if (!KEY) {
-      context.res = { status: 503, headers, body: { error: "Q&A not configured" } };
-      return;
-    }
-
-    const body = req.body || {};
-    const q = (body.question || "").toString().trim().slice(0, 1000);
-    if (!q) {
-      context.res = { status: 400, headers, body: { error: "empty question" } };
-      return;
-    }
-
-    // carry a little conversation context if the page sends it
-    const msgs = [];
-    if (Array.isArray(body.history)) {
-      body.history.slice(-6).forEach(function (m) {
-        if (m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string") {
-          msgs.push({ role: m.role, content: m.content.slice(0, 2000) });
+    if (req.method === "GET") {
+      // self-test: open /api/state?selftest=1 in a browser
+      if (req.query && req.query.selftest) {
+        if (!CONN) { context.res = { status: 200, headers, body: { ok: false, detail: "AZURE_STORAGE_CONNECTION is not set" } }; return; }
+        try {
+          const b = await blobClient();
+          await b.upload("{\"scene\":0,\"ping\":1}", 19, { blobHTTPHeaders: { blobContentType: "application/json" } });
+          context.res = { status: 200, headers, body: { ok: true, container: CONTAINER, detail: "storage read/write OK" } };
+        } catch (e) {
+          context.res = { status: 200, headers, body: { ok: false, detail: (e && e.message) || String(e) } };
         }
-      });
-    }
-    msgs.push({ role: "user", content: q });
-
-    const r = await fetch(ENDPOINT, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": KEY,
-        "anthropic-version": "2023-06-01"
-      },
-      body: JSON.stringify({ model: MODEL, max_tokens: 600, system: SYSTEM, messages: msgs })
-    });
-
-    if (!r.ok) {
-      const t = await r.text();
-      context.log("anthropic error", r.status, t);
-      context.res = { status: 502, headers, body: { error: "upstream error" } };
+        return;
+      }
+      const state = await readState();
+      context.res = { status: 200, headers, body: state };
       return;
     }
 
-    const data = await r.json();
-    const answer = (data.content || [])
-      .filter(function (b) { return b.type === "text"; })
-      .map(function (b) { return b.text; })
-      .join("\n").trim() || "…";
+    if (req.method === "POST") {
+      const body = req.body || {};
+      if (!TOKEN || body.token !== TOKEN) {
+        context.res = { status: 401, headers, body: { error: "unauthorized" } };
+        return;
+      }
+      const scene = Number(body.scene) || 0;
+      const b = await blobClient();
+      const data = JSON.stringify({ scene, ts: Date.now() });
+      await b.upload(data, Buffer.byteLength(data), { blobHTTPHeaders: { blobContentType: "application/json" } });
+      context.res = { status: 200, headers, body: { scene } };
+      return;
+    }
 
-    context.res = { status: 200, headers, body: { answer } };
+    context.res = { status: 405, headers, body: { error: "method not allowed" } };
   } catch (e) {
-    context.log("ask failed", e && e.message);
-    context.res = { status: 500, headers, body: { error: "ask failed" } };
+    context.res = { status: 500, headers, body: { error: "state unavailable", detail: (e && e.message) || String(e) } };
   }
 };
