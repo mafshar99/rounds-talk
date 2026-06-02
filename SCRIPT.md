@@ -1,0 +1,168 @@
+# Speaker Script — *From Tools to Teammates: Agentic AI at the Bedside*
+**Audience:** Healthcare CEOs & company leaders · **Runtime:** ~8:00
+**Driving the page:** `→` / `Space` / click to advance · `←` back · `T` = timer · `F` = fullscreen · `Q` = show the scan-to-follow QR
+**If you're running presenter sync:** open the page as `https://YOUR-URL/?present=YOUR-TOKEN` — your advances drive every phone in the room (see DEPLOY.md, Option B).
+*Cue times below are cumulative targets — they match the little clock the page shows when you press `T` (auto-on in presenter mode).*
+
+---
+
+### SCENE 1 · OPENING  —  *target 1:00*
+*(Title screen is up. Stand. Let it breathe for a beat before you speak.)*
+
+"Good morning, and thank you for having me.
+
+I'll start with a small confession: I'm not a computer scientist. I'm a critical-care physician. My mornings are spent on rounds in the ICU — at the bedside of the sickest patients in the hospital.
+
+So when I talk about agentic AI today, I won't talk about it as a technology looking for a problem. I'll talk about it from *inside* the problem — because the ICU is, I'd argue, the hardest information environment in all of medicine. It's exactly where this technology either earns its place, or it doesn't.
+
+And the stakes are not abstract. The National Academy of Medicine ranks diagnostic error as the *sixth leading cause of death* in this country — twelve million people a year, eighty thousand deaths. In one recent study of hospitalized patients who died or were transferred to intensive care, more than one in five had a diagnostic error. That's the problem I live inside.
+
+Let me put you there."
+
+*(Stakes are cited: National Academy of Medicine, "Improving Diagnosis in Health Care," 2015; Auerbach et al., JAMA Internal Medicine 2024 — the UPSIDE study, 21.7% of in-hospital deaths.)*
+
+**[ADVANCE →]**
+
+---
+
+### SCENE 2 · THE BEDSIDE  —  *target 2:00*
+*(Counters animate: 359 · 130,000 · 206,000, with the Patterson citation underneath.)*
+
+"Here's what the bedside actually looks like as an information problem — and these are our own numbers, from a UW Health analysis of seven hundred thirty-one thousand patient visits.
+
+In 2009, when we adopted the electronic record, a patient carried a median of *five* notes. By 2023, that number was **three hundred fifty-nine.**
+
+A typical ICU admission now generates more than **a hundred and thirty thousand tokens** of text — that is *beyond* what even today's frontier models can reliably read in one pass.
+
+And one in five patients arrives in our emergency department with a chart that is **two hundred six thousand words** long — the length of *Moby Dick.*
+
+Now notice something: almost none of that is the part only a physician can do. The deciding is mine. But the *gathering*, the *reading*, and the *writing* — that's the work that's crushing us. Hold that thought."
+
+*(Source on screen: Patterson et al., JAMIA Open 2024. The token and word counts are from the same UW Health corpus.)*
+
+**[ADVANCE →]**
+
+---
+
+### SCENE 3 · THE ROAD HERE  —  *target 3:00*
+*(Timeline lights up left-to-right, ending on the amber "agents" node.)*
+
+"So how did we get to a point where software might actually help with that? Quickly, because the history explains the *definition.*
+
+It starts with **neural networks** — machines that learn patterns from data instead of following hand-written rules.
+
+Then, 2017, a paper called *'Attention Is All You Need'* — models that learn what matters in context. That unlocked everything.
+
+On top of that came **pretrained language models** — BERT, GPT — where language itself became a reusable foundation.
+
+Then **ChatGPT** turned that into conversation, at scale — which is where most people's mental model stopped.
+
+But there's one more step, happening right now: **LLM-driven agents.** And this is the one that matters to you. Every prior step made the model better at *answering.* This step changed the posture — from answering, to *acting.*"
+
+**[ADVANCE →]**
+
+---
+
+### SCENE 4 · DEFINITION  —  *target 4:00*
+*(Four pillars reveal.)*
+
+"So let me define an agent plainly. A model *answers* a question. An agent *pursues a goal.*
+
+Four things make that possible.
+
+**Reasoning** — it breaks a goal into steps, checks its own work, and re-plans when reality disagrees.
+
+**Tool calling** — it acts on the world: it queries the chart, runs a severity score, retrieves a guideline, drafts a note.
+
+**Memory** — it carries context across the whole encounter, not just the last sentence.
+
+And **conversation** — it collaborates, with me, and with *other agents*, toward a supervised outcome.
+
+Put those four together, under human supervision, and you no longer have a tool. You have a teammate."
+
+**[ADVANCE →]**
+
+---
+
+### SCENE 5 · THE TRADE  —  *target 5:15*
+*(Deskill / upskill balance.)*
+
+"Now, the word that makes every clinician — and every board — nervous: *deskilling.*
+
+Let's be precise about it. On the left is the work we can responsibly hand to agents — extraction, retrieval, summarization, documentation. That work scales linearly with data, and it's what burns clinicians out.
+
+On the right is what humans then have room to *grow into* — genuine human–AI teaming, clinical judgment at the hard edges, oversight and accountability, and orchestrating the agents themselves.
+
+So I'd reframe the fear. We are not deskilling the physician. We are deskilling the *toil* — and upskilling the *team.*"
+
+**[ADVANCE →]**
+
+---
+
+### SCENE 6 · SaaS → SaMD  —  *target 6:15*
+*(Three stages; the rising bars fill toward red.)*
+
+"But here is the line that makes healthcare different from every other industry buying this technology.
+
+It begins as ordinary software — it drafts a note, transcribes a round. If it's wrong, a human catches it. Low risk.
+
+Then it starts to *influence* — surfacing a guideline, flagging a deterioration. Now it's shaping what the clinician sees.
+
+And the moment it informs or drives an actual clinical decision, it has crossed a line — it has become **Software as a Medical Device.** A regulated device.
+
+And with that line comes a higher bar: validation, continuous monitoring, and clear accountability. In our platform, that bar isn't an afterthought — it's PDSQI-9 and a full observability layer, built in. Which brings me to what this actually looks like."
+
+**[ADVANCE →]**
+
+---
+
+### SCENE 7 · ORCHESTRA-ICU  —  *target 7:30*
+*(Architecture comes alive and loops. Let it run — narrate over the animation; you have ~3 passes.)*
+
+"This is Orchestra-ICU. Watch one loop.
+
+I'm at the bedside, talking through a patient — just speaking. Azure Voice Live captures the round ambiently and transcribes it.
+
+That goes to the **orchestrator** — the brain, built on Magentic-One. It doesn't answer; it *plans.* It dispatches a fleet of specialized agents: one pulls the patient's data from Epic over FHIR; one mines the transcript for decisions and action items; one retrieves the relevant guideline; and a safety agent scores everything against PDSQI-9 and flags uncertainty — while the whole thing is monitored for drift and failure.
+
+It all comes back to me as one normalized, sourced answer. And then — this is the most important box on the screen — *I* decide. Accept, override, or ask again. The accountability stays human, every single time."
+
+**[ADVANCE →]**
+
+---
+
+### SCENE 8 · THE CLOSE  —  *target 8:00*
+*(Closing statements reveal.)*
+
+"So let me leave you with the whole argument in three lines.
+
+The agents do the retrieval and the writing. The physician does the deciding and the caring. And the platform earns trust through evidence and oversight.
+
+Here's the part for this room: none of what you just saw is science fiction. It's buildable today, on cloud infrastructure most of you already own. So the question in front of your organizations isn't *whether* — it's governance, evidence, and teaming.
+
+The team in the room just got bigger. Our job is to lead it well.
+
+Thank you."
+
+*(Stop. Hold the close screen for Q&A.)*
+
+---
+
+### SCENE 9 · ASK THE ORCHESTRATOR  —  *Q&A*
+*(Advance one more time to the Ask scene. This is your live Q&A — and the room can join from their phones.)*
+
+"Before we open it up — you've all had this on your phones since the start. Go to that last screen and ask the orchestrator anything. Or shout it out and I'll type it in.
+
+Let's see what it says."
+
+*(Take a couple of questions live. If you're on presenter sync, everyone's phone is already here; each person can type their own. The answer is generated by Claude through a server-side function — your API key never leaves Azure. If the Q&A isn't switched on, the scene quietly says so and you just take questions the normal way.)*
+
+---
+
+## Timing & delivery notes
+- **Pace:** ~130 words/minute. The script lands right around 8:00 with natural pauses.
+- **Two scenes can flex** if you run long: trim the *middle* of SCENE 3 (history) or SCENE 6 (SaaS→SaMD). Never cut SCENE 7 — that's the payoff.
+- **SCENE 7 loops on its own** (~9 sec per pass). Don't rush it; speak across two passes, then advance on the third.
+- **Every figure on screen is sourced** — SCENE 2 from your own Patterson et al. (JAMIA Open 2024) UW Health analysis; the opening stakes from the National Academy of Medicine and the UPSIDE study (Auerbach, JAMA Intern Med 2024). If anyone asks "where's that from," it's your published work.
+- **QR / phones:** press **`Q`** early (e.g. as you say "let me put you there") to throw the scan-to-follow QR on screen. If you set up presenter sync, open your `?present=` URL and the room's phones follow each advance; otherwise they explore self-guided.
+- Press **`T`** once at the start for a private elapsed clock (small and dim; auto-on in presenter mode).
