@@ -1,70 +1,100 @@
-// /api/state — shared "current scene" for presenter -> phones sync.
-// GET  -> { scene }                (public; just a slide number)
-// POST -> { scene, token }         (requires PRESENTER_TOKEN app setting)
-// State persists in one small blob so it survives across function instances.
+// /api/ask — "Ask the orchestrator" Q&A for the closing scene.
+// POST { question, history? } -> { answer }
+// GET  -> a self-test: calls Claude once and reports the result so you can debug in a browser.
 
-const { BlobServiceClient } = require("@azure/storage-blob");
+const https = require("https");
 
-const CONN = process.env.AZURE_STORAGE_CONNECTION;     // storage account connection string
-const CONTAINER = "live";
-const BLOB = "state.json";
-const TOKEN = process.env.PRESENTER_TOKEN || "";       // shared secret used in the presenter URL
+const KEY = process.env.ANTHROPIC_API_KEY;
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
 
-function streamToString(readable) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    readable.on("data", (d) => chunks.push(d.toString()));
-    readable.on("end", () => resolve(chunks.join("")));
-    readable.on("error", reject);
+const SYSTEM = [
+  "You are 'the orchestrator' — a concise, grounded guide taking live questions at the end of a short talk",
+  "that defines agentic AI for an audience of healthcare and company leaders.",
+  "Context: clinicians are buried in documentation; agentic AI can take on the gathering, reading, and",
+  "writing while clinicians keep the deciding and the caring. An orchestrator plans and dispatches small",
+  "specialized agents (patient chart via FHIR, the round's transcript, guidelines, and a safety/evaluation",
+  "agent), with the human in the loop the whole way. As software begins to inform clinical decisions it",
+  "becomes a regulated medical device (SaaS -> SaMD), raising the bar for validation, monitoring, and",
+  "accountability.",
+  "Answer in 2-4 sentences, plain language, no hype, no markdown headings or bullet lists.",
+  "Orient answers to leaders' decisions: governance, evidence, teaming, and risk.",
+  "If asked for medical advice or a diagnosis, decline briefly and note this is an educational demo."
+].join(" ");
+
+function callAnthropic(messages) {
+  return new Promise(function (resolve, reject) {
+    const payload = JSON.stringify({ model: MODEL, max_tokens: 600, system: SYSTEM, messages: messages });
+    const r = https.request(
+      {
+        hostname: "api.anthropic.com",
+        path: "/v1/messages",
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "content-length": Buffer.byteLength(payload),
+          "x-api-key": KEY,
+          "anthropic-version": "2023-06-01"
+        }
+      },
+      function (res) {
+        let data = "";
+        res.on("data", function (c) { data += c; });
+        res.on("end", function () { resolve({ status: res.statusCode, body: data }); });
+      }
+    );
+    r.on("error", reject);
+    r.write(payload);
+    r.end();
   });
-}
-
-async function blobClient() {
-  const svc = BlobServiceClient.fromConnectionString(CONN);
-  const cont = svc.getContainerClient(CONTAINER);
-  await cont.createIfNotExists();
-  return cont.getBlockBlobClient(BLOB);
-}
-
-async function readState() {
-  try {
-    const b = await blobClient();
-    const dl = await b.download();
-    return JSON.parse(await streamToString(dl.readableStreamBody));
-  } catch (e) {
-    return { scene: 0 };
-  }
 }
 
 module.exports = async function (context, req) {
   const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
-
   try {
+    if (!KEY) { context.res = { status: 503, headers, body: { error: "Q&A not configured" } }; return; }
+
     if (req.method === "GET") {
-      const state = await readState();
-      context.res = { status: 200, headers, body: state };
+      const r = await callAnthropic([{ role: "user", content: "Reply with the single word: ok" }]);
+      let detail = r.body;
+      try {
+        const j = JSON.parse(r.body);
+        detail = j.error ? (j.error.message || JSON.stringify(j.error))
+               : (j.content && j.content[0] && j.content[0].text) || r.body;
+      } catch (e) {}
+      context.res = { status: 200, headers, body: { test: true, model: MODEL, upstreamStatus: r.status, detail: detail } };
       return;
     }
 
-    if (req.method === "POST") {
-      const body = req.body || {};
-      if (!TOKEN || body.token !== TOKEN) {
-        context.res = { status: 401, headers, body: { error: "unauthorized" } };
-        return;
-      }
-      const scene = Number(body.scene) || 0;
-      const b = await blobClient();
-      const data = JSON.stringify({ scene, ts: Date.now() });
-      await b.upload(data, Buffer.byteLength(data), {
-        blobHTTPHeaders: { blobContentType: "application/json" },
+    if (req.method !== "POST") { context.res = { status: 405, headers, body: { error: "method not allowed" } }; return; }
+
+    const body = req.body || {};
+    const q = (body.question || "").toString().trim().slice(0, 1000);
+    if (!q) { context.res = { status: 400, headers, body: { error: "empty question" } }; return; }
+
+    const msgs = [];
+    if (Array.isArray(body.history)) {
+      body.history.slice(-6).forEach(function (m) {
+        if (m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string") {
+          msgs.push({ role: m.role, content: m.content.slice(0, 2000) });
+        }
       });
-      context.res = { status: 200, headers, body: { scene } };
+    }
+    msgs.push({ role: "user", content: q });
+
+    const r = await callAnthropic(msgs);
+    if (r.status < 200 || r.status >= 300) {
+      context.log("anthropic error", r.status, r.body);
+      context.res = { status: 502, headers, body: { error: "upstream error", upstreamStatus: r.status } };
       return;
     }
-
-    context.res = { status: 405, headers, body: { error: "method not allowed" } };
+    const data = JSON.parse(r.body);
+    const answer = (data.content || [])
+      .filter(function (b) { return b.type === "text"; })
+      .map(function (b) { return b.text; })
+      .join("\n").trim() || "…";
+    context.res = { status: 200, headers, body: { answer: answer } };
   } catch (e) {
-    // Not configured (no storage) or transient error -> let the client fall back to self-guided.
-    context.res = { status: 500, headers, body: { error: "state unavailable" } };
+    context.log("ask failed", e && e.message);
+    context.res = { status: 500, headers, body: { error: "ask failed", detail: (e && e.message) || String(e) } };
   }
 };
